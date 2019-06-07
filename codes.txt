@@ -1,0 +1,4 @@
+everything_else
+vocal_cord
+trachea_ring
+bifurcation
