@@ -1,0 +1,9 @@
+data/images/*
+data/labels/*
+data/images/models/*
+train.txt
+valid.txt
+nbs/*.mpg
+nbs/*.avi
+nbs/.ipynb_checkpoints/*
+
