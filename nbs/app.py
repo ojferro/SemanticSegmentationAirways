@@ -26,18 +26,14 @@ from helper_functions import *
 ###FUNCTIONS###
 
 def put_classifier_text(frame, main_class, second_class=None):
-    # frame = _frame.copy()
     location_size=cv2.getTextSize("Cam Location: {}".format(main_class[0]), cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
     confidence_size=cv2.getTextSize("Confidence (%): {}".format(main_class[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.45, 2)
     cv2.putText(frame,"Cam Location: {}".format(main_class[0]),(frame.shape[1]-location_size[0][0]-5,25),cv2.FONT_HERSHEY_SIMPLEX,0.5,(20,20,20),1)
     cv2.putText(frame,"Confidence (%): {}".format(main_class[1]),(frame.shape[1]-confidence_size[0][0]-5,45),cv2.FONT_HERSHEY_SIMPLEX,0.45,(20,20,20),1)
-    # main_size=cv2.getTextSize("{}: {}".format(main_class[0],main_class[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
-    # cv2.putText(frame,"{}: {}".format(main_class[0],main_class[1]),(frame.shape[1]-main_size[0][0]-5,45),cv2.FONT_HERSHEY_SIMPLEX,0.5,(10,10,10),1)
-    # cv2.putText(frame,"{}: {}".format(main_class[0],main_class[1]),(300,100),cv2.FONT_HERSHEY_SIMPLEX,0.5,(10,10,10),1)
 
     if second_class is not None:
         second_size=cv2.getTextSize("{}: {}".format(second_class[0], second_class[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.4, 2)
-        cv2.putText(frame,"{}: {}".format(second_class[0], second_class[1]),(frame.shape[1]-second_size[0][0]-5,65),cv2.FONT_HERSHEY_SIMPLEX,0.4,(170,170,170),1)
+        cv2.putText(frame,"{}: {}".format(second_class[0], second_class[1]),(frame.shape[1]-second_size[0][0]-5,65),cv2.FONT_HERSHEY_SIMPLEX,0.4,(20,20,20),1)
 
     return frame
 
@@ -100,7 +96,7 @@ def unwrap_image(mask):
         cX = 125
         cY = 150
         
-    ###### endof find centre ############
+    ###### endof find centroid ############
     
     value = np.sqrt(((mask.shape[0]/2.0)**2.0)+((mask.shape[1]/2.0)**2.0))
     polar_image = cv2.linearPolar(mask.astype(np.float32),(cX,cY), value, cv2.WARP_FILL_OUTLIERS).astype(np.uint8)[:,:,0]
@@ -202,29 +198,24 @@ def correlate_blobs(new_blobs, prev_blobs, percent_overlap_thresh=0.75, child_ar
           
         if max_intercept > 0 and blob_area(nblob) < blob_area(prev_blobs[max_intercept_p])*child_area_thresh and max_intercept > blob_area(nblob)*0.10:
             parent_to_children[max_intercept_p].append(c) #Huzzah! Child picked a parent
-#             print("nparents {} -child {} picked {} ".format(len(prev_blobs), c, max_intercept_p))
         else: #Child has no parent
             orphans.append(c)
                     
-    #Join children blobs (if they belong to the same parent) to deal with blob separation
-    #and add (child,parent) tuple to a "family" list
-#     joined_blobs = {} # len(new_blobs) == len(prev_blobs)+len(orphans)
+    #Join children blobs (if they belong to the same parent) to deal with blob separation and add (child,parent) tuple to a "family" list
+    # len(new_blobs) == len(prev_blobs)+len(orphans)
+
     family = []
     
     for p in range (0, len(parent_to_children)):
-#         joined_blobs[p] = []
         if len(parent_to_children[p])>1: #parent has more than one child
             joined_blob = np.zeros_like(prev_blobs[0])
             for child_blob_index in parent_to_children[p]:
                 joined_blob = cv2.bitwise_or(new_blobs[child_blob_index], joined_blob)
-#                 print("JOINED BLOB TYPE {}".format(joined_blob.dtype))
-#                 print("joined_blobs shape: {}".format(joined_blob.shape))
-#             joined_blobs[p].append(joined_blob)
+
             family.append((joined_blob,prev_blobs[p]))
             
         elif len(parent_to_children[p])==1:
             joined_blob = new_blobs[parent_to_children[p][0]]
-#             joined_blobs[p].append(joined_blob)
             family.append((joined_blob,prev_blobs[p]))
         else: #do nothing -> i.e. a parent that didn't have a child will die
             family.append((np.zeros_like(prev_blobs[p]),prev_blobs[p]))
@@ -284,7 +275,7 @@ def get_non_None_section(last_values):
             break
     return start_none, end_none
 
-def plot_blobs_in_order(mid_blobs, blobs, last_values, plot=True):
+def plot_blobs_in_order(mid_blobs, blobs, last_values, plot=False):
     if len(mid_blobs)>len(blobs):
         print("Error: Mismatched midblobs len ({}) and blobs ({}).".format(len(mid_blobs), len(blobs)))
         return
@@ -307,9 +298,9 @@ def plot_blobs_in_order(mid_blobs, blobs, last_values, plot=True):
     for cX in last_values[start_none: end_none+1]:
         cv2.putText(numbers_frame , "{}".format(last_values.index(cX)), (cX, 120), cv2.FONT_HERSHEY_SIMPLEX,0.3, 255, 1)
     output_frame = (output_frame) | (numbers_frame).astype(np.uint8)
-    output_frame = output_frame.astype(np.uint8)
-    print(output_frame.dtype, np.unique(output_frame))
+    
     if plot:
+        output_frame = output_frame.astype(np.uint8)
         cv2.imshow("blobs",np.array(output_frame/255,dtype=np.float32))
         cv2.waitKey(30)
     
@@ -326,17 +317,10 @@ def overlay_transparent(new_img, transparent_img, x_offset, y_offset):
 
     return new_img
 
-
-# last_values=[None,None,None,4,4,4,41,3,2,6,None] #debug only
-
 def draw_trachea_map(new_img, last_values, tracking_status):
     
-    # new_img = np.zeros((new_img.shape[0],larynx_icon.shape[1]*2, 3), larynx_icon.dtype)
-    # new_img = larynx_icon
-    print("New img shape {}, larynx {}".format(new_img.shape, larynx_icon.shape))
-    # cv2.imshow("lryx",new_img)
-    # if not new_img.shape[1]>larynx_icon.shape[1]:
-    #     print("image is not wide enough")
+    if not new_img.shape[1]>larynx_icon.shape[1]:
+        print("image is not wide enough")
     
     y_offset=0
     x_offset=int(larynx_icon.shape[1]/2)
@@ -347,8 +331,7 @@ def draw_trachea_map(new_img, last_values, tracking_status):
     x_offset += abs(round((larynx_icon.shape[1]-ring_on_icon.shape[1])/2)) #compensate for rings being less wide than larynx icon
     
     if not tracking_status:
-#         cv2.putText(new_img,"TRACKING FAILED.",(0,y_offset+20),cv2.FONT_HERSHEY_SIMPLEX,0.5,(0,0,255),2)
-        print("Returning new_img!")
+        cv2.putText(new_img,"Not tracking",(0,y_offset+20),cv2.FONT_HERSHEY_SIMPLEX,0.4,(0,0,100),1)
         return new_img
 
     first_visible_ring=None
@@ -383,20 +366,13 @@ def draw_trachea_map(new_img, last_values, tracking_status):
 def overlay_mask(img, mask, _alpha=0.6, show=False):
     alpha = _alpha
     beta = (1-alpha)
-    # print("HELLO: {}".format(np.unique()))
     output=alpha*img+beta*np.array(mask/255,dtype=np.float32)
-    # output = cv2.addWeighted(img, alpha, mask.astype('float'), beta, -10.0)
     if np.max(output)>1:
-        print("!!!!!!!!!!!!!!!!!!ERROR!!!!!!!!!!!!!!!!!!!!!!!")
-        print("!!!!!!!!!!!!!!!!!!ERROR!!!!!!!!!!!!!!!!!!!!!!!")
-        print("!!!!!!!!!!!!!!!!!!ERROR!!!!!!!!!!!!!!!!!!!!!!!")
-        print("!!!!!!!!!!!!!!!!!!ERROR!!!!!!!!!!!!!!!!!!!!!!!")
-        print("!!!!!!!!!!!!!!!!!!ERROR!!!!!!!!!!!!!!!!!!!!!!!")
+        print("Error: frame+mask exceeds max value (1). Output is clipping.")
 
     if show:
-#         rgb_ = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
-        pltimg(output)
-#         plt.show()
+        cv2.imshow("Mask overlay", output)
+        cv2.waitKey(30)
     
     return output
 ###ENDOF FUNCTIONS####
@@ -478,7 +454,7 @@ class Tracker():
                     raise Exception('Bad correlation. Parent not in list')
 
                 self.mid_blob_tracks[last_values.index(cX_prev)].append(cX)
-            else:#child is empty
+            else: #child is empty
                 if DEBUG_MODE: print("{} NO CHILD.".format(ctr))
                 self.mid_blob_tracks[last_values.index(cX_prev)].append(None)
                 
@@ -555,16 +531,6 @@ class Tracker():
             last_values = [track[-1] for track in self.mid_blob_tracks]
             plot_blobs_in_order([b[0] for b in blobs_new if blob_area(b[0])>0],blobs_current,last_values,plot=True)
         
-#             fig=plt.figure(figsize=(24,24))
-#             columns = 3
-#             rows = 1
-            
-#             imgs = [intersect,img, img-intersect]
-#             for i in range(1, columns*rows +1):
-#                 fig.add_subplot(rows, columns, i)
-#                 plt.imshow(imgs[i-1])
-#             plt.show()
-            
         return True #successful tracking
 
 ###################ENDOF TRACKER#################################
@@ -574,7 +540,6 @@ path = Path('~/SemanticSegmentationAirways')
 path_lbl = path/'data/labels'
 path_img = path/'data/images'
 path_trained_model = path/'data/models'
-# path_classifier_model = path/'data/models'
 path_lbl = path_lbl.resolve()
 path_img = path_img.resolve()
 
@@ -582,7 +547,6 @@ num_classes = 4 #everything_else, vocal_cords, tracheal_rings, bifurcation
 
 DEBUG_MODE = False
 LIVE_VIDEO = True
-torch.nn.Module.dump_patches = True
 
 #SETUP LEARNER
 
@@ -592,14 +556,6 @@ classifier_class_dict={0:'larynx',1:'subglottis',2:'trachea', 3:'bifurcation'}
 
 #SETUP VIDEO
 
-# if LIVE_VIDEO:
-#     cap = cv2.VideoCapture(0)
-# else:
-    # cap = cv2.VideoCapture('20181010_12y_5031752 mild subglottic stenosis uneditted.mpg')
-# out = cv2.VideoWriter(str(path/'data/videos/trachea_map_demo.avi'),cv2.VideoWriter_fourcc('M','J','P','G'), 20.0, (720,480))
-# print ("Cap fps: {}".format(cap.get(cv2.CAP_PROP_FPS)))
-ctr = 0
-
 ######PARAMS######
 #fps of the input video
 fps=30
@@ -607,12 +563,7 @@ fps=30
 start_time_s= 45
 #end time for annotation (in seconds)
 end_time_s = 54
-mask_timeline = []
 clean_timeline = []
-clean_flattened_timeline = []
-frame_timeline = []
-
-OVERLAY_SEGMENTATION = True
 
 # debug only
 eroded_timeline = []
@@ -638,20 +589,19 @@ class App():
         self.vid = MyVideoCapture(self.video_source)
         self.main_loop = MainLoop()
 
-        #For debugging only
-        # self.out = cv2.VideoWriter('./../data/videos/trachea_map_demo_tracking.avi',cv2.VideoWriter_fourcc('M','J','P','G'), 20.0, (720,480))
-
         # Create a canvas that can fit the above video source size
         self.canvas = tki.Canvas(window, width = 780, height = 480)
         self.canvas.pack()
 
         # Button that lets the user take a snapshot
-        self.btn_snapshot=tki.Button(window, text="Snapshot", width=50, command=self.snapshot)
+        self.btn_snapshot=tki.Button(window, text="Screenshot", width=50, command=self.snapshot)
         self.btn_snapshot.pack(anchor=tki.CENTER, expand=True)
         self.UIoverlay = tki.IntVar(value=1)
         tki.Checkbutton(window, text="Overlay", variable=self.UIoverlay).pack()
         self.UItracking = tki.IntVar(value=1)
         tki.Checkbutton(window, text="Tracking", variable=self.UItracking).pack()
+        self.UIlocation = tki.IntVar(value=1)
+        tki.Checkbutton(window, text="Location", variable=self.UIlocation).pack()
 
         # After it is called once, the update method will be automatically called every delay milliseconds
         self.delay = 1
@@ -664,7 +614,7 @@ class App():
         ret, frame = self.vid.get_frame()
  
         if ret:
-            cv2.imwrite("frame-" + time.strftime("%d-%m-%Y-%H-%M-%S") + ".jpg", cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+            cv2.imwrite("frame-" + time.strftime("%d-%m-%Y-%H-%M-%S") + ".jpg", frame)
  
     def update(self):
         # Get a frame from the video source
@@ -672,8 +622,6 @@ class App():
         ret, frame = self.vid.get_frame()
 
         output_frame = self.main_loop.iterate(frame,overlay_segmentation=self.UIoverlay.get(), track_position=self.UItracking.get())
-        # output_frame = (resize(output_frame, (output_frame.shape[0]*2, output_frame.shape[1]*2), anti_aliasing=True)*255).astype(np.uint8)
-        # self.out.write(output_frame)
  
         if ret:
             self.photo = PIL.ImageTk.PhotoImage(image = PIL.Image.fromarray(output_frame))
@@ -684,9 +632,8 @@ class App():
 class MyVideoCapture:
     def __init__(self, video_source=0):
         # Open the video source
-        print("before")
         self.vid = cv2.VideoCapture(video_source)
-        print("after")
+
         if not self.vid.isOpened():
             raise ValueError("Unable to open video source", video_source)
         else:
@@ -704,34 +651,15 @@ class MyVideoCapture:
             ret, frame = self.vid.read()
             if ret:
                 # Return a boolean success flag and the current frame converted to BGR
-                # cv2.imshow("",frame)
-                return (ret, cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-            else:
-                return (ret, None)
-        else:
-            return (ret, None)
+                return (ret, frame)
+
+        return (ret, None)
 
     # Release the video source when the object is destroyed
     def __del__(self):
         if self.vid.isOpened():
             self.vid.release()
 
-
-###MAIN LOOP###
-# clear_output()
-print ("Starting!")
-
-#For finding posterior region
-# posterior_region_ctr = 0
-# prev_posterior_angles = [int(224/4),int(224/4),int(224/4),int(224/4)]
-#endof For finding posterior region
-
-
-#For tracking
-# tracker=None
-#endof For tracking
-# ctr=0
-# time_taken = 0
 
 class MainLoop():
     def __init__(self, overlay_segmentation=True, debug_mode=False):
@@ -741,13 +669,10 @@ class MainLoop():
         self.posterior_region_ctr = 0
         self.prev_posterior_angles = [int(224/4),int(224/4),int(224/4),int(224/4)]
 
-        # self.OVERLAY_SEGMENTATION = overlay_segmentation
-        # self.DEBUG_MODE = debug_mode
-
     def iterate(self, frame, overlay_segmentation=True, track_position=True, classify_section=True, debug_mode=False):
         self.ctr+=1
         
-        frame = crop_img(frame[...,::-1])
+        frame = crop_img(frame)
         frame = 255 * frame # Now scale by 255
         frame = frame.astype(np.uint8)
         
@@ -760,62 +685,38 @@ class MainLoop():
 
         # Clean up linear image
         clean_img = cv2.erode(polar_image,np.ones((11,1)))
-    #     clean_flattened_timeline.append((clean_img,(cX,cY)))
         
         #Finding posterior region
         posterior, self.prev_posterior_angles, self.posterior_region_ctr = find_posterior_region(clean_img, self.prev_posterior_angles, self.posterior_region_ctr)
         mask_continuous = get_posterior_corrected_frame(clean_img, posterior)
         
         #Tracking
-        # clear_output(wait=True)
         print("ctr {}".format(self.ctr))
         
         img = mask_continuous==1
         output_image = frame.copy()
         output_image = (output_image/255).astype(np.float32)
         if overlay_segmentation:
-            cv2.imshow("raw frame",(crop_img(frame)))
-            cv2.imshow("2",(mask_to_colour(mask)))
             overlay = overlay_mask(crop_img(frame), mask_to_colour(mask), _alpha=0.9, show=False)
-    #         pltimg(overlay[...,::-1])
-            # overlay = resize(overlay, (min(output_image.shape[0:2]),min(output_image.shape[0:2])),anti_aliasing=True)
             overlay = crop_img(overlay)
-            # print('shape {}'.format(overlay.shape))
-            # cv2.imshow("overlay", overlay)
             output_image = overlay
         
         tracheal_map = np.zeros((480,120,3), dtype=np.float32)
         if self.tracker is None:
-            self.tracker=Tracker(init_frame=img, _verbose=True)
+            self.tracker=Tracker(init_frame=img)
             if track_position:
                 tracheal_map = np.array(draw_trachea_map(tracheal_map, [], False)/255, dtype=np.float32)
-            # mapp = img_as_float(mapp)
-            # mapp = np.array((mapp/255), dtype=np.float32)
-            # print("Mapp dtype: {}, {}".format(output_image.dtype,np.unique(output_image)))
-            # print(np.unique(output_image))
-            # print(mapp)
-            # pltimg(mapp)
-            # cv2.imshow("map", mapp)
-            # if track_position:
-            #     output_image = np.concatenate((output_image, mapp), axis=1)
-            # cv2.imshow('concat', overlayed_map)
-            # pltimg(overlayed_map)
         else:
             success = self.tracker.iterate(img)
             if track_position:
                 tracheal_map = np.array(draw_trachea_map(tracheal_map, [track[-1] for track in self.tracker.mid_blob_tracks], success)/255, dtype=np.float32)
 
-    #         pltimg(overlayed_map[...,::-1])
-            
-            # cv2.imshow("overlayed map", overlayed_map)
-            # out.write(overlayed_map)
             #Restart tracker from next frame if tracking is not successful
             if not success: self.tracker = None
         
         output_image = np.concatenate((tracheal_map, crop_img(output_image, size=480), np.zeros((480,180,3), dtype=np.float32)), axis=1)
         if classify_section:
             output_image = put_classifier_text(output_image, classifier_main)
-        # cv2.imshow("3", )
 
         if debug_mode:
             #Tests for optimal erosion level
@@ -832,10 +733,6 @@ class MainLoop():
 
 
 App(tki.Tk(), "SmartEndoscope", video_source='20181010_12y_5031752 mild subglottic stenosis uneditted.mpg')
-# cap = MyVideoCapture(0)
-# ret, frame = cap.get_frame()
-# cv2.imshow("", frame)
-
 
 print ("End!")
 print("Success!")
