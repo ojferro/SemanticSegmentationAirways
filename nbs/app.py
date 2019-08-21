@@ -7,15 +7,11 @@ import imutils
 from fastai.vision import *
 from skimage import measure
 from skimage import filters
-import matplotlib.pyplot as plt
-import numpy as np
 from scipy import ndimage
 import sys
 from fastai.vision import Image
 from fastai.callbacks.hooks import *
 from fastai.utils.mem import *
-from matplotlib import pyplot as plt
-import numpy as np
 import PIL
 from IPython.display import clear_output
 import time
@@ -23,18 +19,26 @@ import bisect as bi
 import IPython.display as disp
 import fastai
 import tkinter as tki
+from PIL import ImageTk
 
 from helper_functions import *
 
 ###FUNCTIONS###
 
-def put_classifier_text(_frame, main_class, second_class):
-    frame = _frame.copy()
-    main_size=cv2.getTextSize("{}: {}".format(main_class[0],main_class[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
-    second_size=cv2.getTextSize("{}: {}".format(second_class[0], second_class[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.4, 2)
-    
-    cv2.putText(frame,"{}: {}".format(main_class[0],main_class[1]),(frame.shape[1]-main_size[0][0]-5,25),cv2.FONT_HERSHEY_SIMPLEX,0.5,(0,255,0),2)
-    cv2.putText(frame,"{}: {}".format(second_class[0], second_class[1]),(frame.shape[1]-second_size[0][0]-5,45),cv2.FONT_HERSHEY_SIMPLEX,0.4,(170,170,170),2)
+def put_classifier_text(frame, main_class, second_class=None):
+    # frame = _frame.copy()
+    location_size=cv2.getTextSize("Cam Location: {}".format(main_class[0]), cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
+    confidence_size=cv2.getTextSize("Confidence (%): {}".format(main_class[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.45, 2)
+    cv2.putText(frame,"Cam Location: {}".format(main_class[0]),(frame.shape[1]-location_size[0][0]-5,25),cv2.FONT_HERSHEY_SIMPLEX,0.5,(20,20,20),1)
+    cv2.putText(frame,"Confidence (%): {}".format(main_class[1]),(frame.shape[1]-confidence_size[0][0]-5,45),cv2.FONT_HERSHEY_SIMPLEX,0.45,(20,20,20),1)
+    # main_size=cv2.getTextSize("{}: {}".format(main_class[0],main_class[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
+    # cv2.putText(frame,"{}: {}".format(main_class[0],main_class[1]),(frame.shape[1]-main_size[0][0]-5,45),cv2.FONT_HERSHEY_SIMPLEX,0.5,(10,10,10),1)
+    # cv2.putText(frame,"{}: {}".format(main_class[0],main_class[1]),(300,100),cv2.FONT_HERSHEY_SIMPLEX,0.5,(10,10,10),1)
+
+    if second_class is not None:
+        second_size=cv2.getTextSize("{}: {}".format(second_class[0], second_class[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.4, 2)
+        cv2.putText(frame,"{}: {}".format(second_class[0], second_class[1]),(frame.shape[1]-second_size[0][0]-5,65),cv2.FONT_HERSHEY_SIMPLEX,0.4,(170,170,170),1)
+
     return frame
 
 def inference(frame):
@@ -76,14 +80,6 @@ def inference_classification(frame):
 #     cv2.putText(frame,"{}: {}".format(classifier_class_dict[outputs.index(outputs[-2])],second),(5,55),cv2.FONT_HERSHEY_COMPLEX,0.9,(170,170,170),2)
     
     return (classifier_class_dict[outputs.index(np.max(outputs))], main), (classifier_class_dict[outputs.index(np.sort(outputs)[-2])], second)
-
-def put_classifier_text(frame, main_class, second_class):
-    main_size=cv2.getTextSize("{}: {}".format(main_class[0],main_class[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
-    second_size=cv2.getTextSize("{}: {}".format(second_class[0], second_class[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.4, 2)
-    
-    cv2.putText(frame,"{}: {}".format(main_class[0],main_class[1]),(frame.shape[1]-main_size[0][0]-5,25),cv2.FONT_HERSHEY_SIMPLEX,0.5,(0,255,0),2)
-    cv2.putText(frame,"{}: {}".format(second_class[0], second_class[1]),(frame.shape[1]-second_size[0][0]-5,45),cv2.FONT_HERSHEY_SIMPLEX,0.4,(170,170,170),2)
-    return frame
     
     
 def unwrap_image(mask):
@@ -366,7 +362,7 @@ def draw_trachea_map(new_img, last_values, tracking_status):
                 if first_visible_ring is None:
                     first_visible_ring=ring_num+1
     
-        cv2.putText(new_img,"{}".format(ring_num+1),(ring_on_icon.shape[1]+10,y_offset+15),cv2.FONT_HERSHEY_SIMPLEX,0.3,(0,255,0),1)
+        cv2.putText(new_img,"{}".format(ring_num+1),(ring_on_icon.shape[1]+10,y_offset+15),cv2.FONT_HERSHEY_SIMPLEX,0.3,(0,0,0),1)
         y_offset+=ring_on_icon.shape[0]
 
         
@@ -630,131 +626,7 @@ ring_on_icon=cv2.imread('./icons/ring_selected.png')
 dots_icon=cv2.imread('./icons/dotdotdot.png')
 camera_icon=cv2.imread('./icons/camera.png', cv2.IMREAD_UNCHANGED)
 
-
-#Advance to starting frame
-# if not LIVE_VIDEO:
-#     for i in range(0,start_time_s*fps):
-#         ret, frame = cap.read()
-#         ctr+=1
-#     for _ in range(0,72):
-#         ret, frame = cap.read()
-#     ret, frame = cap.read() #frame is uint8
-#     cv2.imshow("frame", frame)
-# ret, frame = cap.read() 
-
 #Set up UI
-from PIL import ImageTk
-# import threading
-import os
-import  datetime
-
-# class UserInterface:
-# 	def __init__(self, cap, outputPath):
-# 		# store the video stream object and output path, then initialize
-# 		# the most recently read frame, thread for reading frames, and
-# 		# the thread stop event
-# 		self.cap = cap
-# 		self.outputPath = outputPath
-# 		self.frame = None
-# 		self.thread = None
-# 		self.stopEvent = None
-
-# 		# initialize the root window and image panel
-# 		self.root = tki.Tk()
-# 		self.panel = None
-
-# 		# create a button, that when pressed, will take the current
-# 		# frame and save it to file
-# 		btn = tki.Button(self.root, text="Snapshot", command=self.takeSnapshot)
-# 		btn.pack(side="bottom", fill="both", expand="yes", padx=10, pady=10)
-
-# 		# start a thread that constantly pools the video sensor for
-# 		# the most recently read frame
-# 		self.stopEvent = threading.Event()
-# 		self.thread` = threading.Thread(target=self.videoLoop, args=())
-# 		self.thread.start()
-
-# 		# set a callback to handle when the window is closed
-# 		self.root.wm_title("Tracheal Localizer")
-# 		self.root.wm_protocol("WM_DELETE_WINDOW", self.onClose)
-
-# 	def videoLoop(self):
-# 		try:
-# 			# keep looping over frames until we are instructed to stop
-# 			while not self.stopEvent.is_set():
-# 				# grab the frame from the video stream and resize it to
-# 				# have a maximum width of 300 pixels
-# 				self.frame = self.cap.read()
-# 				self.frame = imutils.resize(self.frame, width=300)
-		
-# 				# OpenCV represents images in BGR order; however PIL
-# 				# represents images in RGB order, so we need to swap
-# 				# the channels, then convert to PIL and ImageTk format
-# 				image = self.frame[...,::-1]
-# 				image = Image.fromarray(image)
-# 				image = ImageTk.PhotoImage(image)
-		
-# 				# if the panel is not None, we need to initialize it
-# 				if self.panel is None:
-# 					self.panel = tki.Label(image=image)
-# 					self.panel.image = image
-# 					self.panel.pack(side="left", padx=10, pady=10)
-		
-# 				# otherwise, simply update the panel
-# 				else:
-# 					self.panel.configure(image=image)
-# 					self.panel.image = image
-
-# 		except:
-# 			print("[INFO] caught a RuntimeError {}")
-
-# 	def takeSnapshot(self):
-# 		# grab the current timestamp and use it to construct the
-# 		# output path
-# 		ts = datetime.datetime.now()
-# 		filename = "{}.jpg".format(ts.strftime("%Y-%m-%d_%H-%M-%S"))
-# 		p = os.path.sep.join((self.outputPath, filename))
-
-# 		# save the file
-# 		cv2.imwrite(p, self.frame.copy())
-# 		print("[INFO] saved {}".format(filename))
-
-# 	def onClose(self):
-# 		# set the stop event, cleanup the camera, and allow the rest of
-# 		# the quit process to continue
-# 		print("[INFO] closing...")
-# 		self.stopEvent.set()
-# 		self.cap.stop()
-# 		self.root.quit()
-
-# class App(threading.Thread):
-#     def __init__(self):
-#         threading.Thread.__init__(self)
-#         self.start()
-
-#     def callback(self):
-#         self.root.quit()
-
-#     def run(self):
-#         self.root = tki.Tk()
-#         self.root.protocol("WM_DELETE_WINDOW", self.callback)
-
-#         UIoverlay = tki.IntVar()
-#         tki.Checkbutton(self.root, text="overlay", variable=UIoverlay).grid(row=0, sticky=tki.W)
-#         UItracking = tki.IntVar()
-#         tki.Checkbutton(self.root, text="tracking", variable=UItracking).grid(row=1, sticky=tki.W)
-#         tki.Button(self.root, text='Reset Tracker', command=None).grid(row=3, sticky=tki.W, pady=4)
-
-#         while True:
-#             image = PIL.Image.fromarray(frame)
-#             image = ImageTk.PhotoImage(image)
-#             panel = tki.Label(self.root, image=image)
-#             panel.image = image
-#             panel.grid(padx=10, pady=10)
-
-#             self.root.mainloop()
-
-# app = App()
 
 class App():
     def __init__(self, window, window_title, video_source=0):
@@ -767,10 +639,10 @@ class App():
         self.main_loop = MainLoop()
 
         #For debugging only
-        self.out = cv2.VideoWriter('./../data/videos/trachea_map_demo_tracking.avi',cv2.VideoWriter_fourcc('M','J','P','G'), 20.0, (720,480))
+        # self.out = cv2.VideoWriter('./../data/videos/trachea_map_demo_tracking.avi',cv2.VideoWriter_fourcc('M','J','P','G'), 20.0, (720,480))
 
         # Create a canvas that can fit the above video source size
-        self.canvas = tki.Canvas(window, width = 720, height = 480)
+        self.canvas = tki.Canvas(window, width = 780, height = 480)
         self.canvas.pack()
 
         # Button that lets the user take a snapshot
@@ -801,7 +673,7 @@ class App():
 
         output_frame = self.main_loop.iterate(frame,overlay_segmentation=self.UIoverlay.get(), track_position=self.UItracking.get())
         # output_frame = (resize(output_frame, (output_frame.shape[0]*2, output_frame.shape[1]*2), anti_aliasing=True)*255).astype(np.uint8)
-        self.out.write(output_frame)
+        # self.out.write(output_frame)
  
         if ret:
             self.photo = PIL.ImageTk.PhotoImage(image = PIL.Image.fromarray(output_frame))
@@ -940,8 +812,9 @@ class MainLoop():
             #Restart tracker from next frame if tracking is not successful
             if not success: self.tracker = None
         
-        output_image = np.concatenate((tracheal_map, crop_img(output_image, size=480), np.zeros((480,120,3), dtype=np.float32)), axis=1)
-        output_image = put_classifier_text(output_image, classifier_main, classifier_second)
+        output_image = np.concatenate((tracheal_map, crop_img(output_image, size=480), np.zeros((480,180,3), dtype=np.float32)), axis=1)
+        if classify_section:
+            output_image = put_classifier_text(output_image, classifier_main)
         # cv2.imshow("3", )
 
         if debug_mode:
