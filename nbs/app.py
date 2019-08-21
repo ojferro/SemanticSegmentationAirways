@@ -22,6 +22,7 @@ import time
 import bisect as bi
 import IPython.display as disp
 import fastai
+import tkinter as tki
 
 from helper_functions import *
 
@@ -310,8 +311,11 @@ def plot_blobs_in_order(mid_blobs, blobs, last_values, plot=True):
     for cX in last_values[start_none: end_none+1]:
         cv2.putText(numbers_frame , "{}".format(last_values.index(cX)), (cX, 120), cv2.FONT_HERSHEY_SIMPLEX,0.3, 255, 1)
     output_frame = (output_frame) | (numbers_frame).astype(np.uint8)
-    
-    if plot: pltimg(output_frame)
+    output_frame = output_frame.astype(np.uint8)
+    print(output_frame.dtype, np.unique(output_frame))
+    if plot:
+        cv2.imshow("blobs",np.array(output_frame/255,dtype=np.float32))
+        cv2.waitKey(30)
     
     return output_frame
 
@@ -323,61 +327,75 @@ def overlay_transparent(new_img, transparent_img, x_offset, y_offset):
 
     for c in range(0, 3):
         new_img[y_offset:y_offset+transparent_img.shape[0], x_offset:x_offset+transparent_img.shape[1], c] = (alpha_s * transparent_img[:, :, c] + alpha_l * new_img[y_offset:y_offset+transparent_img.shape[0], x_offset:x_offset+transparent_img.shape[1], c])
-    
+
     return new_img
 
 
 # last_values=[None,None,None,4,4,4,41,3,2,6,None] #debug only
 
 def draw_trachea_map(new_img, last_values, tracking_status):
-       
-    if not new_img.shape[1]>larynx_icon.shape[1]:
-        print("image is not wide enough")
+    
+    # new_img = np.zeros((new_img.shape[0],larynx_icon.shape[1]*2, 3), larynx_icon.dtype)
+    # new_img = larynx_icon
+    print("New img shape {}, larynx {}".format(new_img.shape, larynx_icon.shape))
+    # cv2.imshow("lryx",new_img)
+    # if not new_img.shape[1]>larynx_icon.shape[1]:
+    #     print("image is not wide enough")
     
     y_offset=0
-    x_offset=0
+    x_offset=int(larynx_icon.shape[1]/2)
 
     #Add larynx
     new_img[y_offset:y_offset+larynx_icon.shape[0], x_offset:x_offset+larynx_icon.shape[1]]=larynx_icon
     y_offset+=larynx_icon.shape[0]-2
-    x_offset = abs(round((larynx_icon.shape[1]-ring_on_icon.shape[1])/2)) #compensate for rings being less wide than larynx icon
-    
-    first_visible_ring=None
-    for ring_num, val in enumerate(last_values):
-        if val is None or not tracking_status:
-            new_img[y_offset:y_offset+ring_off_icon.shape[0], x_offset:x_offset+ring_off_icon.shape[1]] = ring_off_icon
-        else:
-            new_img[y_offset:y_offset+ring_on_icon.shape[0], x_offset:x_offset+ring_on_icon.shape[1]] = ring_on_icon
-            if first_visible_ring is None:
-                first_visible_ring=ring_num+1
-    
-        cv2.putText(new_img,"{}".format(ring_num+1),(ring_on_icon.shape[1]+10,y_offset+15),cv2.FONT_HERSHEY_SIMPLEX,0.3,(0,255,0),1)
-        y_offset+=ring_on_icon.shape[0]
+    x_offset += abs(round((larynx_icon.shape[1]-ring_on_icon.shape[1])/2)) #compensate for rings being less wide than larynx icon
     
     if not tracking_status:
 #         cv2.putText(new_img,"TRACKING FAILED.",(0,y_offset+20),cv2.FONT_HERSHEY_SIMPLEX,0.5,(0,0,255),2)
+        print("Returning new_img!")
         return new_img
+
+    first_visible_ring=None
+    for ring_num, val in enumerate(last_values):
+        if val is None or not tracking_status:
+            if y_offset+ring_off_icon.shape[0]<new_img.shape[0]:
+                new_img[y_offset:y_offset+ring_off_icon.shape[0], x_offset:x_offset+ring_off_icon.shape[1]] = ring_off_icon
+        else:
+            if y_offset+ring_off_icon.shape[0]<new_img.shape[0]:
+                new_img[y_offset:y_offset+ring_on_icon.shape[0], x_offset:x_offset+ring_on_icon.shape[1]] = ring_on_icon
+                if first_visible_ring is None:
+                    first_visible_ring=ring_num+1
+    
+        cv2.putText(new_img,"{}".format(ring_num+1),(ring_on_icon.shape[1]+10,y_offset+15),cv2.FONT_HERSHEY_SIMPLEX,0.3,(0,255,0),1)
+        y_offset+=ring_on_icon.shape[0]
+
         
     # Ellipsis
-    x_offset=round(ring_on_icon.shape[1]/2)+3
+    x_offset=round(ring_on_icon.shape[1]/2)+int(larynx_icon.shape[1]/2)+3
     y_offset+=2
-    new_img[y_offset:y_offset+dots_icon.shape[0], x_offset:x_offset+dots_icon.shape[1]] = dots_icon
+    if y_offset+dots_icon.shape[0]<new_img.shape[0]:
+        new_img[y_offset:y_offset+dots_icon.shape[0], x_offset:x_offset+dots_icon.shape[1]] = dots_icon
     
     # Camera
-    x_offset=round(ring_on_icon.shape[1]/2)+2
+    x_offset=round(ring_on_icon.shape[1]/2)+int(larynx_icon.shape[1]/2)+2
     y_offset=(first_visible_ring-1)*ring_on_icon.shape[0]+larynx_icon.shape[0]-15
     new_img = overlay_transparent(new_img, camera_icon, x_offset, y_offset)
         
     return new_img
-    
-# new_img = np.zeros((300,224, 3),dtype=np.uint8) #placeholder, use video frame for actual version
-# new_img = draw_trachea_map(new_img, last_values, False)
-# pltimg(new_img)
 
-def overlay_mask(img, mask, alpha=0.6, show=False):
-    alpha = alpha
+
+def overlay_mask(img, mask, _alpha=0.6, show=False):
+    alpha = _alpha
     beta = (1-alpha)
-    output = cv2.addWeighted(img, alpha, mask.astype('float'), beta, 0.0)
+    # print("HELLO: {}".format(np.unique()))
+    output=alpha*img+beta*np.array(mask/255,dtype=np.float32)
+    # output = cv2.addWeighted(img, alpha, mask.astype('float'), beta, -10.0)
+    if np.max(output)>1:
+        print("!!!!!!!!!!!!!!!!!!ERROR!!!!!!!!!!!!!!!!!!!!!!!")
+        print("!!!!!!!!!!!!!!!!!!ERROR!!!!!!!!!!!!!!!!!!!!!!!")
+        print("!!!!!!!!!!!!!!!!!!ERROR!!!!!!!!!!!!!!!!!!!!!!!")
+        print("!!!!!!!!!!!!!!!!!!ERROR!!!!!!!!!!!!!!!!!!!!!!!")
+        print("!!!!!!!!!!!!!!!!!!ERROR!!!!!!!!!!!!!!!!!!!!!!!")
 
     if show:
 #         rgb_ = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
@@ -578,12 +596,12 @@ classifier_class_dict={0:'larynx',1:'subglottis',2:'trachea', 3:'bifurcation'}
 
 #SETUP VIDEO
 
-if LIVE_VIDEO:
-    cap = cv2.VideoCapture(0)
-else:
-    cap = cv2.VideoCapture('20181010_12y_5031752 mild subglottic stenosis uneditted.mpg')
+# if LIVE_VIDEO:
+#     cap = cv2.VideoCapture(0)
+# else:
+    # cap = cv2.VideoCapture('20181010_12y_5031752 mild subglottic stenosis uneditted.mpg')
 # out = cv2.VideoWriter(str(path/'data/videos/trachea_map_demo.avi'),cv2.VideoWriter_fourcc('M','J','P','G'), 20.0, (720,480))
-print ("Cap fps: {}".format(cap.get(cv2.CAP_PROP_FPS)))
+# print ("Cap fps: {}".format(cap.get(cv2.CAP_PROP_FPS)))
 ctr = 0
 
 ######PARAMS######
@@ -614,14 +632,217 @@ camera_icon=cv2.imread('./icons/camera.png', cv2.IMREAD_UNCHANGED)
 
 
 #Advance to starting frame
-if not LIVE_VIDEO:
-    for i in range(0,start_time_s*fps):
-        ret, frame = cap.read()
-        ctr+=1
-    for _ in range(0,72):
-        ret, frame = cap.read()
-    ret, frame = cap.read() #frame is uint8
-    cv2.imshow("frame", frame)
+# if not LIVE_VIDEO:
+#     for i in range(0,start_time_s*fps):
+#         ret, frame = cap.read()
+#         ctr+=1
+#     for _ in range(0,72):
+#         ret, frame = cap.read()
+#     ret, frame = cap.read() #frame is uint8
+#     cv2.imshow("frame", frame)
+# ret, frame = cap.read() 
+
+#Set up UI
+from PIL import ImageTk
+# import threading
+import os
+import  datetime
+
+# class UserInterface:
+# 	def __init__(self, cap, outputPath):
+# 		# store the video stream object and output path, then initialize
+# 		# the most recently read frame, thread for reading frames, and
+# 		# the thread stop event
+# 		self.cap = cap
+# 		self.outputPath = outputPath
+# 		self.frame = None
+# 		self.thread = None
+# 		self.stopEvent = None
+
+# 		# initialize the root window and image panel
+# 		self.root = tki.Tk()
+# 		self.panel = None
+
+# 		# create a button, that when pressed, will take the current
+# 		# frame and save it to file
+# 		btn = tki.Button(self.root, text="Snapshot", command=self.takeSnapshot)
+# 		btn.pack(side="bottom", fill="both", expand="yes", padx=10, pady=10)
+
+# 		# start a thread that constantly pools the video sensor for
+# 		# the most recently read frame
+# 		self.stopEvent = threading.Event()
+# 		self.thread` = threading.Thread(target=self.videoLoop, args=())
+# 		self.thread.start()
+
+# 		# set a callback to handle when the window is closed
+# 		self.root.wm_title("Tracheal Localizer")
+# 		self.root.wm_protocol("WM_DELETE_WINDOW", self.onClose)
+
+# 	def videoLoop(self):
+# 		try:
+# 			# keep looping over frames until we are instructed to stop
+# 			while not self.stopEvent.is_set():
+# 				# grab the frame from the video stream and resize it to
+# 				# have a maximum width of 300 pixels
+# 				self.frame = self.cap.read()
+# 				self.frame = imutils.resize(self.frame, width=300)
+		
+# 				# OpenCV represents images in BGR order; however PIL
+# 				# represents images in RGB order, so we need to swap
+# 				# the channels, then convert to PIL and ImageTk format
+# 				image = self.frame[...,::-1]
+# 				image = Image.fromarray(image)
+# 				image = ImageTk.PhotoImage(image)
+		
+# 				# if the panel is not None, we need to initialize it
+# 				if self.panel is None:
+# 					self.panel = tki.Label(image=image)
+# 					self.panel.image = image
+# 					self.panel.pack(side="left", padx=10, pady=10)
+		
+# 				# otherwise, simply update the panel
+# 				else:
+# 					self.panel.configure(image=image)
+# 					self.panel.image = image
+
+# 		except:
+# 			print("[INFO] caught a RuntimeError {}")
+
+# 	def takeSnapshot(self):
+# 		# grab the current timestamp and use it to construct the
+# 		# output path
+# 		ts = datetime.datetime.now()
+# 		filename = "{}.jpg".format(ts.strftime("%Y-%m-%d_%H-%M-%S"))
+# 		p = os.path.sep.join((self.outputPath, filename))
+
+# 		# save the file
+# 		cv2.imwrite(p, self.frame.copy())
+# 		print("[INFO] saved {}".format(filename))
+
+# 	def onClose(self):
+# 		# set the stop event, cleanup the camera, and allow the rest of
+# 		# the quit process to continue
+# 		print("[INFO] closing...")
+# 		self.stopEvent.set()
+# 		self.cap.stop()
+# 		self.root.quit()
+
+# class App(threading.Thread):
+#     def __init__(self):
+#         threading.Thread.__init__(self)
+#         self.start()
+
+#     def callback(self):
+#         self.root.quit()
+
+#     def run(self):
+#         self.root = tki.Tk()
+#         self.root.protocol("WM_DELETE_WINDOW", self.callback)
+
+#         UIoverlay = tki.IntVar()
+#         tki.Checkbutton(self.root, text="overlay", variable=UIoverlay).grid(row=0, sticky=tki.W)
+#         UItracking = tki.IntVar()
+#         tki.Checkbutton(self.root, text="tracking", variable=UItracking).grid(row=1, sticky=tki.W)
+#         tki.Button(self.root, text='Reset Tracker', command=None).grid(row=3, sticky=tki.W, pady=4)
+
+#         while True:
+#             image = PIL.Image.fromarray(frame)
+#             image = ImageTk.PhotoImage(image)
+#             panel = tki.Label(self.root, image=image)
+#             panel.image = image
+#             panel.grid(padx=10, pady=10)
+
+#             self.root.mainloop()
+
+# app = App()
+
+class App():
+    def __init__(self, window, window_title, video_source=0):
+        self.window = window
+        self.window.title(window_title)
+        self.video_source = video_source
+
+        # open video source (by default this will try to open the computer webcam)
+        self.vid = MyVideoCapture(self.video_source)
+        self.main_loop = MainLoop()
+
+        #For debugging only
+        self.out = cv2.VideoWriter('./../data/videos/trachea_map_demo_tracking.avi',cv2.VideoWriter_fourcc('M','J','P','G'), 20.0, (720,480))
+
+        # Create a canvas that can fit the above video source size
+        self.canvas = tki.Canvas(window, width = 720, height = 480)
+        self.canvas.pack()
+
+        # Button that lets the user take a snapshot
+        self.btn_snapshot=tki.Button(window, text="Snapshot", width=50, command=self.snapshot)
+        self.btn_snapshot.pack(anchor=tki.CENTER, expand=True)
+        self.UIoverlay = tki.IntVar(value=1)
+        tki.Checkbutton(window, text="Overlay", variable=self.UIoverlay).pack()
+        self.UItracking = tki.IntVar(value=1)
+        tki.Checkbutton(window, text="Tracking", variable=self.UItracking).pack()
+
+        # After it is called once, the update method will be automatically called every delay milliseconds
+        self.delay = 1
+        self.update()
+
+        self.window.mainloop()
+ 
+    def snapshot(self):
+        # Get a frame from the video source
+        ret, frame = self.vid.get_frame()
+ 
+        if ret:
+            cv2.imwrite("frame-" + time.strftime("%d-%m-%Y-%H-%M-%S") + ".jpg", cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+ 
+    def update(self):
+        # Get a frame from the video source
+        
+        ret, frame = self.vid.get_frame()
+
+        output_frame = self.main_loop.iterate(frame,overlay_segmentation=self.UIoverlay.get(), track_position=self.UItracking.get())
+        # output_frame = (resize(output_frame, (output_frame.shape[0]*2, output_frame.shape[1]*2), anti_aliasing=True)*255).astype(np.uint8)
+        self.out.write(output_frame)
+ 
+        if ret:
+            self.photo = PIL.ImageTk.PhotoImage(image = PIL.Image.fromarray(output_frame))
+            self.canvas.create_image(0, 0, image = self.photo, anchor = tki.NW)
+ 
+        self.window.after(self.delay, self.update)
+
+class MyVideoCapture:
+    def __init__(self, video_source=0):
+        # Open the video source
+        print("before")
+        self.vid = cv2.VideoCapture(video_source)
+        print("after")
+        if not self.vid.isOpened():
+            raise ValueError("Unable to open video source", video_source)
+        else:
+            print("Cap is open!")
+
+        for i in range(0,45*30+73):
+            ret, frame = self.vid.read()
+
+        # Get video source width and height
+        self.width = self.vid.get(cv2.CAP_PROP_FRAME_WIDTH)
+        self.height = self.vid.get(cv2.CAP_PROP_FRAME_HEIGHT)
+
+    def get_frame(self):
+        if self.vid.isOpened():
+            ret, frame = self.vid.read()
+            if ret:
+                # Return a boolean success flag and the current frame converted to BGR
+                # cv2.imshow("",frame)
+                return (ret, cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+            else:
+                return (ret, None)
+        else:
+            return (ret, None)
+
+    # Release the video source when the object is destroyed
+    def __del__(self):
+        if self.vid.isOpened():
+            self.vid.release()
 
 
 ###MAIN LOOP###
@@ -629,100 +850,119 @@ if not LIVE_VIDEO:
 print ("Starting!")
 
 #For finding posterior region
-posterior_region_ctr = 0
-prev_posterior_angles = [int(224/4),int(224/4),int(224/4),int(224/4)]
+# posterior_region_ctr = 0
+# prev_posterior_angles = [int(224/4),int(224/4),int(224/4),int(224/4)]
 #endof For finding posterior region
 
 
 #For tracking
-tracker=None
+# tracker=None
 #endof For tracking
-ctr=0
-time_taken = 0
+# ctr=0
+# time_taken = 0
 
-print(cap.read()[1].dtype)
+class MainLoop():
+    def __init__(self, overlay_segmentation=True, debug_mode=False):
+        self.ctr = 0
+        self.tracker = None
 
-while(cap.isOpened() and ctr < ctr+1 if LIVE_VIDEO else end_time_s*fps):
-    start_time = time.time()
-    ctr+=1
-    
-    ret, frame = cap.read() #frame is uint8
-    if np.shape(frame) == (): #i.e. empty frame
-        break
+        self.posterior_region_ctr = 0
+        self.prev_posterior_angles = [int(224/4),int(224/4),int(224/4),int(224/4)]
 
+        # self.OVERLAY_SEGMENTATION = overlay_segmentation
+        # self.DEBUG_MODE = debug_mode
 
-    frame = crop_img(frame)
-    # info = np.iinfo(frame.dtype) # Get the information of the incoming image type
-    # frame = frame.astype(np.float64) / info.max # normalize the data to 0 - 1
-    frame = 255 * frame # Now scale by 255
-    frame = frame.astype(np.uint8)
-    #resize(frame,(224,224),anti_aliasing=True)
-    
-    # Perform inference
-    mask = inference(frame)
-    classifier_main, classifier_second = inference_classification(frame)
-#     pltimg(classified_frame[...,::-1])
-#     pltimg(classifier_output[...,::-1])
-#     print("classifier output shape {}".format(np.shape(classifier_output)))
-
-    # Convert from linear to polar
-    polar_image = unwrap_image(mask)
-
-    # Clean up linear image
-    clean_img = cv2.erode(polar_image,np.ones((11,1)))
-#     clean_flattened_timeline.append((clean_img,(cX,cY)))
-    
-    #Finding posterior region
-    posterior, prev_posterior_angles, posterior_region_ctr = find_posterior_region(clean_img, prev_posterior_angles, posterior_region_ctr)
-    mask_continuous = get_posterior_corrected_frame(clean_img, posterior)
-    
-    #Tracking
-    clear_output(wait=True)
-    print("ctr {}".format(ctr))
-    
-    img = mask_continuous==1
-    output_image = np.zeros_like(frame)
-    if OVERLAY_SEGMENTATION:
-        cv2.imshow("raw frame",(crop_img(frame)))
-        # cv2.imshow("2",(mask_to_colour(mask)))
-        overlay = overlay_mask(crop_img(frame), mask_to_colour(mask), alpha=0.9, show=False)
-#         pltimg(overlay[...,::-1])
-        overlay = resize(overlay, (min(output_image.shape[0:2]),min(output_image.shape[0:2])),anti_aliasing=True)
-        print('shape {}'.format(overlay.shape))
-        cv2.imshow("overlay", overlay)
+    def iterate(self, frame, overlay_segmentation=True, track_position=True, classify_section=True, debug_mode=False):
+        self.ctr+=1
         
-    if tracker is None:
-        tracker=Tracker(init_frame=img, _verbose=False)
-    else:
-        success = tracker.iterate(img)
-        overlayed_map = draw_trachea_map(frame, [track[-1] for track in tracker.mid_blob_tracks], success)
-#         pltimg(overlayed_map[...,::-1])
-        cv2.imshow("3", put_classifier_text(overlayed_map, classifier_main, classifier_second))
-        cv2.imshow("overlayed map", overlayed_map)
-        # out.write(overlayed_map)
-        #Restart tracker from next frame if tracking is not successful
-        if not success: tracker = None
+        frame = crop_img(frame[...,::-1])
+        frame = 255 * frame # Now scale by 255
+        frame = frame.astype(np.uint8)
+        
+        # Perform inference
+        mask = inference(frame)
+        classifier_main, classifier_second = inference_classification(frame)
 
-    if DEBUG_MODE:
-        #Tests for optimal erosion level
-        e_list = []
-        for num in range(5,12):
-            e = cv2.erode(polar_image,np.ones((num,1)))
-            e_list.append(e)
-        eroded_timeline.append(e_list)
+        # Convert from linear to polar
+        polar_image = unwrap_image(mask)
+
+        # Clean up linear image
+        clean_img = cv2.erode(polar_image,np.ones((11,1)))
+    #     clean_flattened_timeline.append((clean_img,(cX,cY)))
         
-        # Cleaned up linear image
-        linear_image = cv2.linearPolar(e,(cX,cY), value, cv2.WARP_INVERSE_MAP+cv2.WARP_FILL_OUTLIERS)
-        clean_timeline.append(linear_image)
-    print("Iterating")
-    cv2.waitKey(30)
-    # end_time=time.time()
-    # time_taken += (end_time-start_time)
-#     if ctr == 120: break
+        #Finding posterior region
+        posterior, self.prev_posterior_angles, self.posterior_region_ctr = find_posterior_region(clean_img, self.prev_posterior_angles, self.posterior_region_ctr)
+        mask_continuous = get_posterior_corrected_frame(clean_img, posterior)
         
-# print("time taken {}s".format(time_taken/ctr))
-cap.release()
+        #Tracking
+        # clear_output(wait=True)
+        print("ctr {}".format(self.ctr))
+        
+        img = mask_continuous==1
+        output_image = frame.copy()
+        output_image = (output_image/255).astype(np.float32)
+        if overlay_segmentation:
+            cv2.imshow("raw frame",(crop_img(frame)))
+            cv2.imshow("2",(mask_to_colour(mask)))
+            overlay = overlay_mask(crop_img(frame), mask_to_colour(mask), _alpha=0.9, show=False)
+    #         pltimg(overlay[...,::-1])
+            # overlay = resize(overlay, (min(output_image.shape[0:2]),min(output_image.shape[0:2])),anti_aliasing=True)
+            overlay = crop_img(overlay)
+            # print('shape {}'.format(overlay.shape))
+            # cv2.imshow("overlay", overlay)
+            output_image = overlay
+        
+        tracheal_map = np.zeros((480,120,3), dtype=np.float32)
+        if self.tracker is None:
+            self.tracker=Tracker(init_frame=img, _verbose=True)
+            if track_position:
+                tracheal_map = np.array(draw_trachea_map(tracheal_map, [], False)/255, dtype=np.float32)
+            # mapp = img_as_float(mapp)
+            # mapp = np.array((mapp/255), dtype=np.float32)
+            # print("Mapp dtype: {}, {}".format(output_image.dtype,np.unique(output_image)))
+            # print(np.unique(output_image))
+            # print(mapp)
+            # pltimg(mapp)
+            # cv2.imshow("map", mapp)
+            # if track_position:
+            #     output_image = np.concatenate((output_image, mapp), axis=1)
+            # cv2.imshow('concat', overlayed_map)
+            # pltimg(overlayed_map)
+        else:
+            success = self.tracker.iterate(img)
+            if track_position:
+                tracheal_map = np.array(draw_trachea_map(tracheal_map, [track[-1] for track in self.tracker.mid_blob_tracks], success)/255, dtype=np.float32)
+
+    #         pltimg(overlayed_map[...,::-1])
+            
+            # cv2.imshow("overlayed map", overlayed_map)
+            # out.write(overlayed_map)
+            #Restart tracker from next frame if tracking is not successful
+            if not success: self.tracker = None
+        
+        output_image = np.concatenate((tracheal_map, crop_img(output_image, size=480), np.zeros((480,120,3), dtype=np.float32)), axis=1)
+        output_image = put_classifier_text(output_image, classifier_main, classifier_second)
+        # cv2.imshow("3", )
+
+        if debug_mode:
+            #Tests for optimal erosion level
+            e_list = []
+            for num in range(5,12):
+                e = cv2.erode(polar_image,np.ones((num,1)))
+                e_list.append(e)
+            eroded_timeline.append(e_list)
+            
+            # Cleaned up linear image
+            linear_image = cv2.linearPolar(e,(cX,cY), value, cv2.WARP_INVERSE_MAP+cv2.WARP_FILL_OUTLIERS)
+            clean_timeline.append(linear_image)
+        return ((output_image*255).astype(np.uint8)[...,::-1])
+
+
+App(tki.Tk(), "SmartEndoscope", video_source='20181010_12y_5031752 mild subglottic stenosis uneditted.mpg')
+# cap = MyVideoCapture(0)
+# ret, frame = cap.get_frame()
+# cv2.imshow("", frame)
+
+
 print ("End!")
-
-
-print("success!")
+print("Success!")
