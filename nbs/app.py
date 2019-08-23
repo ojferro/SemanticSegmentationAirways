@@ -70,10 +70,6 @@ def inference_classification(frame):
     main = "{0:.2f}".format(float("{0:.2f}".format(max(outputs)*100.0)))
     second = "{0:.2f}".format(float(np.sort(outputs)[-2]*100.0))
     outputs = np.array(outputs).tolist()
-#     outputs = np.sort(outputs).tolist()
-
-#     cv2.putText(frame,"{}: {}".format(,main),(5,25),cv2.FONT_HERSHEY_SIMPLEX,0.9,(0,255,0),2)
-#     cv2.putText(frame,"{}: {}".format(classifier_class_dict[outputs.index(outputs[-2])],second),(5,55),cv2.FONT_HERSHEY_COMPLEX,0.9,(170,170,170),2)
     
     return (classifier_class_dict[outputs.index(np.max(outputs))], main), (classifier_class_dict[outputs.index(np.sort(outputs)[-2])], second)
     
@@ -331,7 +327,8 @@ def draw_trachea_map(new_img, last_values, tracking_status):
     x_offset += abs(round((larynx_icon.shape[1]-ring_on_icon.shape[1])/2)) #compensate for rings being less wide than larynx icon
     
     if not tracking_status:
-        cv2.putText(new_img,"Not tracking",(0,y_offset+20),cv2.FONT_HERSHEY_SIMPLEX,0.4,(0,0,100),1)
+        cv2.putText(new_img,"Tracker failed.",(10,y_offset+20),cv2.FONT_HERSHEY_SIMPLEX,0.4,(0,0,100),1)
+        cv2.putText(new_img,"Must Reset.",(10,y_offset+40),cv2.FONT_HERSHEY_SIMPLEX,0.4,(0,0,100),1)
         return new_img
 
     first_visible_ring=None
@@ -594,14 +591,15 @@ class App():
         self.canvas.pack()
 
         # Button that lets the user take a snapshot
-        self.btn_snapshot=tki.Button(window, text="Screenshot", width=50, command=self.snapshot)
-        self.btn_snapshot.pack(anchor=tki.CENTER, expand=True)
         self.UIoverlay = tki.IntVar(value=1)
         tki.Checkbutton(window, text="Overlay", variable=self.UIoverlay).pack()
         self.UItracking = tki.IntVar(value=1)
         tki.Checkbutton(window, text="Tracking", variable=self.UItracking).pack()
-        self.UIlocation = tki.IntVar(value=1)
-        tki.Checkbutton(window, text="Location", variable=self.UIlocation).pack()
+
+        self.btn_snapshot=tki.Button(window, text="Screenshot", width=50, command=self.snapshot)
+        self.btn_snapshot.pack(anchor=tki.CENTER, expand=True)
+        self.btn_snapshot=tki.Button(window, text="Reset Tracker", width=50, command=self.reset_tracker)
+        self.btn_snapshot.pack(anchor=tki.CENTER, expand=True)
 
         # After it is called once, the update method will be automatically called every delay milliseconds
         self.delay = 1
@@ -615,6 +613,9 @@ class App():
  
         if ret:
             cv2.imwrite("frame-" + time.strftime("%d-%m-%Y-%H-%M-%S") + ".jpg", frame)
+    
+    def reset_tracker(self):
+        self.main_loop.tracker = None
  
     def update(self):
         # Get a frame from the video source
@@ -633,14 +634,20 @@ class MyVideoCapture:
     def __init__(self, video_source=0):
         # Open the video source
         self.vid = cv2.VideoCapture(video_source)
+        self.vid.open('/dev/video0')
+        ret, frame= self.vid.read()
+        if ret:
+            print("showing")
+            cv2.waitKey(100)
+
 
         if not self.vid.isOpened():
             raise ValueError("Unable to open video source", video_source)
         else:
             print("Cap is open!")
 
-        for i in range(0,45*30+73):
-            ret, frame = self.vid.read()
+        # for i in range(0,45*30): #+73
+        #     ret, frame = self.vid.read()
 
         # Get video source width and height
         self.width = self.vid.get(cv2.CAP_PROP_FRAME_WIDTH)
@@ -651,6 +658,7 @@ class MyVideoCapture:
             ret, frame = self.vid.read()
             if ret:
                 # Return a boolean success flag and the current frame converted to BGR
+                frame = np.flipud(frame)
                 return (ret, frame)
 
         return (ret, None)
@@ -665,12 +673,15 @@ class MainLoop():
     def __init__(self, overlay_segmentation=True, debug_mode=False):
         self.ctr = 0
         self.tracker = None
+        self.prev_locations = [classifier_class_dict[0]]*5
+        self.location=None
 
         self.posterior_region_ctr = 0
         self.prev_posterior_angles = [int(224/4),int(224/4),int(224/4),int(224/4)]
 
     def iterate(self, frame, overlay_segmentation=True, track_position=True, classify_section=True, debug_mode=False):
         self.ctr+=1
+        print("ctr {}".format(self.ctr))
         
         frame = crop_img(frame)
         frame = 255 * frame # Now scale by 255
@@ -679,40 +690,46 @@ class MainLoop():
         # Perform inference
         mask = inference(frame)
         classifier_main, classifier_second = inference_classification(frame)
+        self.prev_locations[self.ctr%len(self.prev_locations)] = classifier_main[0]
 
-        # Convert from linear to polar
-        polar_image = unwrap_image(mask)
+        a, b = np.unique(self.prev_locations, return_counts=True)
+        print(a[b.argmax()])
+        self.location=a[b.argmax()]
 
-        # Clean up linear image
-        clean_img = cv2.erode(polar_image,np.ones((11,1)))
-        
-        #Finding posterior region
-        posterior, self.prev_posterior_angles, self.posterior_region_ctr = find_posterior_region(clean_img, self.prev_posterior_angles, self.posterior_region_ctr)
-        mask_continuous = get_posterior_corrected_frame(clean_img, posterior)
-        
-        #Tracking
-        print("ctr {}".format(self.ctr))
-        
-        img = mask_continuous==1
+        tracheal_map = np.zeros((480,120,3), dtype=np.float32)
+        if self.location == 'trachea':
+            # Convert from linear to polar
+            polar_image = unwrap_image(mask)
+
+            # Clean up linear image
+            clean_img = cv2.erode(polar_image,np.ones((11,1)))
+            
+            #Finding posterior region
+            posterior, self.prev_posterior_angles, self.posterior_region_ctr = find_posterior_region(clean_img, self.prev_posterior_angles, self.posterior_region_ctr)
+            mask_continuous = get_posterior_corrected_frame(clean_img, posterior)
+            
+            #Tracking
+            img = mask_continuous==1
+            if self.tracker is None:
+                print("Tracker is None!")
+                self.tracker=Tracker(init_frame=img)
+                if track_position:
+                    tracheal_map = np.array(draw_trachea_map(tracheal_map, [], False)/255, dtype=np.float32)
+            else:
+                success = self.tracker.iterate(img)
+                if track_position:
+                    tracheal_map = np.array(draw_trachea_map(tracheal_map, [track[-1] for track in self.tracker.mid_blob_tracks], success)/255, dtype=np.float32)
+
+                #Restart tracker from next frame if tracking is not successful
+                if not success: self.tracker = None
+
+        #Output
         output_image = frame.copy()
         output_image = (output_image/255).astype(np.float32)
         if overlay_segmentation:
             overlay = overlay_mask(crop_img(frame), mask_to_colour(mask), _alpha=0.9, show=False)
             overlay = crop_img(overlay)
             output_image = overlay
-        
-        tracheal_map = np.zeros((480,120,3), dtype=np.float32)
-        if self.tracker is None:
-            self.tracker=Tracker(init_frame=img)
-            if track_position:
-                tracheal_map = np.array(draw_trachea_map(tracheal_map, [], False)/255, dtype=np.float32)
-        else:
-            success = self.tracker.iterate(img)
-            if track_position:
-                tracheal_map = np.array(draw_trachea_map(tracheal_map, [track[-1] for track in self.tracker.mid_blob_tracks], success)/255, dtype=np.float32)
-
-            #Restart tracker from next frame if tracking is not successful
-            if not success: self.tracker = None
         
         output_image = np.concatenate((tracheal_map, crop_img(output_image, size=480), np.zeros((480,180,3), dtype=np.float32)), axis=1)
         if classify_section:
@@ -732,7 +749,7 @@ class MainLoop():
         return ((output_image*255).astype(np.uint8)[...,::-1])
 
 
-App(tki.Tk(), "SmartEndoscope", video_source='20181010_12y_5031752 mild subglottic stenosis uneditted.mpg')
+App(tki.Tk(), "SmartEndoscope", video_source=0)#'20181010_12y_5031752 mild subglottic stenosis uneditted.mpg')
 
 print ("End!")
 print("Success!")
