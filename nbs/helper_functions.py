@@ -286,7 +286,6 @@ def get_blobs(img, imshow=False):
 
     blobs_labels = [measure.label(blobs, background=0)[:,:,0] for blobs in sep_classes]
 
-    plt.figure(figsize=(9, 3.5))
 
     if imshow:
         for i in range(1,num_classes):

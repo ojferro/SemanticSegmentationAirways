@@ -532,6 +532,22 @@ class Tracker():
 
 ###################ENDOF TRACKER#################################
 
+#Splash screen
+import tkinter as tk
+root = tk.Tk()
+root.overrideredirect(True)
+width = root.winfo_screenwidth()
+height = root.winfo_screenheight()
+root.geometry('%dx%d+%d+%d' % (width*0.285, width*0.285, width*0.35, height*0.3))
+
+image_file = "/home/ojferro/SemanticSegmentationAirways/splash_screen3.png"
+image = tk.PhotoImage(file=image_file)
+canvas = tk.Canvas(root, height=width*0.4, width=width*0.4)
+canvas.create_image(0,0, image=image, anchor='nw')
+canvas.pack()
+root.after(10000, root.destroy)
+root.mainloop()
+
 
 path = Path('~/SemanticSegmentationAirways')
 path_lbl = path/'data/labels'
